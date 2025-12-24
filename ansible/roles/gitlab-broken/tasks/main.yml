@@ -1,0 +1,51 @@
+---
+# =============================================================================
+# Task 4: GitLab Runner - Jobs не выполняются
+# =============================================================================
+# Легенда: "Runner зарегистрирован, jobs падают сразу. Разберись."
+#
+# Проблема:
+# - gitlab-runner работает
+# - executor = docker в config.toml
+# - Docker daemon ОСТАНОВЛЕН
+# =============================================================================
+
+- name: Add GitLab Runner repository
+  shell: |
+    curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | bash
+  args:
+    creates: /etc/apt/sources.list.d/runner_gitlab-runner.list
+
+- name: Install GitLab Runner
+  apt:
+    name: gitlab-runner
+    state: present
+    update_cache: yes
+
+- name: Create GitLab Runner config directory
+  file:
+    path: /etc/gitlab-runner
+    state: directory
+    mode: '0755'
+
+- name: Create fake GitLab Runner config (registered but broken)
+  template:
+    src: config.toml.j2
+    dest: /etc/gitlab-runner/config.toml
+    mode: '0600'
+
+- name: Enable and start GitLab Runner
+  systemd:
+    name: gitlab-runner
+    state: started
+    enabled: yes
+
+# =============================================================================
+# КРИТИЧНО: Останавливаем Docker ПОСЛЕ всех задач, которые его используют!
+# =============================================================================
+
+- name: Stop Docker daemon (this breaks gitlab-runner)
+  systemd:
+    name: docker
+    state: stopped
+  # НЕ отключаем enabled, чтобы после reboot Docker стартовал

@@ -1,0 +1,48 @@
+---
+# =============================================================================
+# Task 1: Docker - Port недоступен + найти compose
+# =============================================================================
+# Легенда: "Разработчик жалуется, что приложение не отвечает на порту 8080.
+#           Контейнер запущен, но curl возвращает connection refused."
+#
+# Проблема: Приложение слушает 127.0.0.1:8080 вместо 0.0.0.0:8080
+# compose.yaml находится в нестандартном месте: /opt/apps/webapp/deploy/
+# =============================================================================
+
+- name: Create webapp directory structure
+  file:
+    path: /opt/apps/webapp/deploy/html
+    state: directory
+    mode: '0755'
+
+- name: Create index.html
+  copy:
+    content: |
+      <!DOCTYPE html>
+      <html>
+      <head><title>Interview App</title></head>
+      <body>
+        <h1>Hello from Interview App!</h1>
+        <p>If you see this, the app is working correctly.</p>
+      </body>
+      </html>
+    dest: /opt/apps/webapp/deploy/html/index.html
+    mode: '0644'
+
+- name: Create broken docker-compose.yaml
+  template:
+    src: compose.yaml.j2
+    dest: /opt/apps/webapp/deploy/compose.yaml
+    mode: '0644'
+
+- name: Start the webapp container
+  community.docker.docker_compose_v2:
+    project_src: /opt/apps/webapp/deploy
+    state: present
+  register: docker_compose_result
+  ignore_errors: yes
+
+- name: Fallback - start container with docker compose command
+  shell: |
+    cd /opt/apps/webapp/deploy && docker compose up -d
+  when: docker_compose_result is failed

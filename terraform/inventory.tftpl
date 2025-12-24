@@ -1,0 +1,11 @@
+---
+all:
+  hosts:
+    ${vm_name}:
+      ansible_host: ${vm_ip}
+      ansible_user: ubuntu
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+  children:
+    interview:
+      hosts:
+        ${vm_name}:

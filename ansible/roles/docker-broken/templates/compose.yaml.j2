@@ -1,0 +1,15 @@
+# Docker Compose for Interview Webapp
+# Location: /opt/apps/webapp/deploy/compose.yaml
+
+services:
+  webapp:
+    image: python:3.11-slim
+    container_name: webapp
+    ports:
+      - "8080:8080"
+    # BUG: Приложение слушает только localhost (127.0.0.1), недоступно снаружи контейнера
+    command: python -m http.server 8080 --bind 127.0.0.1
+    working_dir: /app
+    volumes:
+      - ./html:/app
+    restart: unless-stopped

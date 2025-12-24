@@ -1,0 +1,37 @@
+---
+# =============================================================================
+# Task 2: DNS не работает
+# =============================================================================
+# Легенда: "curl google.com не работает, но ping по IP работает. Почини."
+#
+# Проблема:
+# - /etc/resolv.conf содержит nameserver 10.255.255.1 (не существует)
+# - systemd-resolved остановлен
+# =============================================================================
+
+- name: Stop systemd-resolved
+  systemd:
+    name: systemd-resolved
+    state: stopped
+    enabled: no
+  ignore_errors: yes
+
+- name: Remove symlink to stub-resolv.conf
+  file:
+    path: /etc/resolv.conf
+    state: absent
+  ignore_errors: yes
+
+- name: Create broken resolv.conf with non-existent DNS
+  copy:
+    content: |
+      # DNS configuration
+      nameserver 10.255.255.1
+    dest: /etc/resolv.conf
+    mode: '0644'
+
+- name: Make resolv.conf immutable (harder to accidentally fix)
+  file:
+    path: /etc/resolv.conf
+    attributes: ""
+  ignore_errors: yes

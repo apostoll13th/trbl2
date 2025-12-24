@@ -1,0 +1,26 @@
+# Environment
+.env
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfplan
+terraform/.terraform.lock.hcl
+
+# Ansible
+ansible/inventory/hosts.yml
+
+# SSH Keys
+*.pem
+id_rsa*
+
+# OS
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE
+.idea/
+.vscode/
