@@ -1,0 +1,73 @@
+---
+# =============================================================================
+# Task 6: Disk Full - Удалённые файлы держат место
+# =============================================================================
+# Легенда: "Диск показывает 95% занято, но du показывает мало.
+#           Приложение не может писать логи."
+#
+# Проблема: Удалённый файл всё ещё держится открытым процессом
+# =============================================================================
+
+- name: Create log directory
+  file:
+    path: /var/log/interview-app
+    state: directory
+    mode: '0755'
+
+- name: Create large log file (500MB)
+  shell: |
+    dd if=/dev/zero of=/var/log/interview-app/app.log bs=1M count=500
+  args:
+    creates: /var/log/interview-app/app.log
+
+- name: Create process that holds the file open
+  copy:
+    content: |
+      #!/bin/bash
+      # This process holds the log file open
+      exec 3</var/log/interview-app/app.log
+      while true; do
+        sleep 60
+      done
+    dest: /usr/local/bin/log-reader.sh
+    mode: '0755'
+
+- name: Create systemd service for log reader
+  copy:
+    content: |
+      [Unit]
+      Description=Log Reader Service (holds file descriptor)
+      After=network.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/log-reader.sh
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/log-reader.service
+    mode: '0644'
+
+- name: Start log reader service
+  systemd:
+    name: log-reader
+    state: started
+    enabled: yes
+    daemon_reload: yes
+
+- name: Wait for service to open file
+  pause:
+    seconds: 2
+
+- name: Delete the log file (but process still holds it)
+  file:
+    path: /var/log/interview-app/app.log
+    state: absent
+
+- name: Create small marker file to show directory is almost empty
+  copy:
+    content: "Application log directory\n"
+    dest: /var/log/interview-app/README.txt
+    mode: '0644'

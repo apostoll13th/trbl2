@@ -1,0 +1,86 @@
+---
+# =============================================================================
+# Task 7: SSL Certificate - Истёкший сертификат
+# =============================================================================
+# Легенда: "HTTPS сайт не работает. Nginx запущен, но браузер показывает ошибку."
+#
+# Проблема: SSL сертификат истёк (expired)
+# =============================================================================
+
+- name: Install Nginx
+  apt:
+    name: nginx
+    state: present
+
+- name: Create SSL directory
+  file:
+    path: /etc/nginx/ssl
+    state: directory
+    mode: '0755'
+
+- name: Generate expired SSL certificate (expired 1 day ago)
+  shell: |
+    openssl req -x509 -nodes -days -1 \
+      -newkey rsa:2048 \
+      -keyout /etc/nginx/ssl/interview.key \
+      -out /etc/nginx/ssl/interview.crt \
+      -subj "/C=RU/ST=Moscow/L=Moscow/O=Interview/CN=interview.local" \
+      -addext "subjectAltName=DNS:interview.local,DNS:localhost"
+  args:
+    creates: /etc/nginx/ssl/interview.crt
+
+- name: Create HTTPS site configuration
+  copy:
+    content: |
+      server {
+          listen 443 ssl;
+          server_name interview.local localhost;
+
+          ssl_certificate /etc/nginx/ssl/interview.crt;
+          ssl_certificate_key /etc/nginx/ssl/interview.key;
+
+          root /var/www/html;
+          index index.html;
+
+          location / {
+              try_files $uri $uri/ =404;
+          }
+      }
+
+      server {
+          listen 80;
+          server_name interview.local localhost;
+          return 301 https://$host$request_uri;
+      }
+    dest: /etc/nginx/sites-available/interview-ssl
+    mode: '0644'
+
+- name: Create test HTML page
+  copy:
+    content: |
+      <!DOCTYPE html>
+      <html>
+      <head><title>Secure Interview App</title></head>
+      <body>
+        <h1>Welcome to Secure Interview App!</h1>
+        <p>If you see this over HTTPS, SSL is working correctly.</p>
+      </body>
+      </html>
+    dest: /var/www/html/index.html
+    mode: '0644'
+
+- name: Enable HTTPS site
+  file:
+    src: /etc/nginx/sites-available/interview-ssl
+    dest: /etc/nginx/sites-enabled/interview-ssl
+    state: link
+
+- name: Remove default site
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Restart Nginx
+  systemd:
+    name: nginx
+    state: restarted
