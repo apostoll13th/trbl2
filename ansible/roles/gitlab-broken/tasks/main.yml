@@ -7,7 +7,7 @@
 # Проблема:
 # - gitlab-runner работает
 # - executor = docker в config.toml
-# - Docker daemon ОСТАНОВЛЕН
+# - Неправильный путь к docker socket в config.toml
 # =============================================================================
 
 - name: Add GitLab Runner repository
@@ -28,7 +28,7 @@
     state: directory
     mode: '0755'
 
-- name: Create fake GitLab Runner config (registered but broken)
+- name: Create broken GitLab Runner config (wrong docker host)
   template:
     src: config.toml.j2
     dest: /etc/gitlab-runner/config.toml
@@ -39,13 +39,3 @@
     name: gitlab-runner
     state: started
     enabled: yes
-
-# =============================================================================
-# КРИТИЧНО: Останавливаем Docker ПОСЛЕ всех задач, которые его используют!
-# =============================================================================
-
-- name: Stop Docker daemon (this breaks gitlab-runner)
-  systemd:
-    name: docker
-    state: stopped
-  # НЕ отключаем enabled, чтобы после reboot Docker стартовал

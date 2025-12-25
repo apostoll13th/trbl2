@@ -25,3 +25,5 @@ shutdown_timeout = 0
     volumes = ["/cache"]
     shm_size = 0
     network_mtu = 0
+    # BUG: Неправильный путь к docker socket!
+    host = "unix:///var/run/docker-wrong.sock"

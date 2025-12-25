@@ -163,7 +163,7 @@ kubectl -n interview patch deployment webapp --type='json' -p='[
 ### Проблема
 - GitLab Runner работает и зарегистрирован
 - Executor = docker
-- Docker daemon остановлен
+- В config.toml указан неправильный путь к docker socket
 
 ### Диагностика
 ```bash
@@ -174,32 +174,40 @@ systemctl status gitlab-runner
 # Проверить конфигурацию
 cat /etc/gitlab-runner/config.toml
 # Видим: executor = "docker"
+# Видим: host = "unix:///var/run/docker-wrong.sock"  <-- ПРОБЛЕМА!
 
-# Проверить Docker
+# Docker работает нормально
 docker ps
-# Видим: Cannot connect to the Docker daemon
+# Видим: контейнеры работают
 
-systemctl status docker
-# Видим: inactive (dead)
-
-# Или через gitlab-runner
-gitlab-runner verify
-# Видим ошибку про docker
+# Но gitlab-runner не может подключиться
+sudo gitlab-runner verify
+# Видим ошибку: Cannot connect to the Docker daemon at unix:///var/run/docker-wrong.sock
 ```
 
 ### Решение
 ```bash
-# Запустить Docker
-sudo systemctl start docker
+# Редактировать config.toml
+sudo vim /etc/gitlab-runner/config.toml
+
+# Найти и удалить или исправить строку:
+#   host = "unix:///var/run/docker-wrong.sock"
+# На:
+#   host = "unix:///var/run/docker.sock"
+# Или просто удалить эту строку (используется дефолтный путь)
+
+# Перезапустить runner
+sudo systemctl restart gitlab-runner
 
 # Проверить
-docker ps
-gitlab-runner verify
+sudo gitlab-runner verify
 ```
 
 ### Ключевые моменты
-- GitLab Runner с docker executor требует работающий Docker daemon
+- GitLab Runner с docker executor требует доступ к Docker socket
+- Дефолтный путь: `/var/run/docker.sock`
 - `gitlab-runner verify` - проверка работоспособности runner
+- Всегда проверять конфигурацию в `/etc/gitlab-runner/config.toml`
 - Другие executors: shell, kubernetes, docker+machine
 
 ---
