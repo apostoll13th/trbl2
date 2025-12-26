@@ -1,0 +1,64 @@
+---
+# =============================================================================
+# Task 8: Nginx Systemd - Сервис не стартует
+# =============================================================================
+# Легенда: "Nginx установлен, но systemctl start nginx падает.
+#           Нужно починить чтобы сервис стартовал."
+#
+# Проблема: В конфиге nginx синтаксическая ошибка
+# =============================================================================
+
+# Примечание: Nginx уже установлен в ssl-broken роли
+# Эта роль добавляет второй сайт со сломанным конфигом
+
+- name: Ensure Nginx is installed
+  apt:
+    name: nginx
+    state: present
+
+- name: Create broken nginx config (missing semicolon)
+  copy:
+    content: |
+      server {
+          listen 8081;
+          server_name api.interview.local;
+
+          root /var/www/api;
+          index index.html
+
+          location / {
+              try_files $uri $uri/ =404;
+          }
+
+          location /health {
+              return 200 'OK';
+              add_header Content-Type text/plain;
+          }
+      }
+    dest: /etc/nginx/sites-available/api-broken
+    mode: '0644'
+
+- name: Create API directory
+  file:
+    path: /var/www/api
+    state: directory
+    mode: '0755'
+
+- name: Create API index page
+  copy:
+    content: |
+      {"status": "ok", "service": "interview-api"}
+    dest: /var/www/api/index.html
+    mode: '0644'
+
+- name: Enable broken site
+  file:
+    src: /etc/nginx/sites-available/api-broken
+    dest: /etc/nginx/sites-enabled/api-broken
+    state: link
+
+- name: Stop nginx (it will fail to start due to config error)
+  systemd:
+    name: nginx
+    state: stopped
+  ignore_errors: yes

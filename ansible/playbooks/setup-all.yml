@@ -1,0 +1,80 @@
+---
+# =============================================================================
+# DevOps Interview Tasks Setup Playbook
+# =============================================================================
+# ВАЖНО: dns-broken должен быть ПОСЛЕДНЕЙ ролью, иначе apt сломается!
+# ВАЖНО: nginx-systemd-broken должен идти ПОСЛЕ ssl-broken!
+# =============================================================================
+
+- name: Setup DevOps Interview VM
+  hosts: interview
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Wait for system to become reachable
+      wait_for_connection:
+        delay: 5
+        timeout: 300
+
+    - name: Gather facts after connection
+      setup:
+
+    - name: Wait for apt lock to be released
+      shell: while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done
+      changed_when: false
+
+  roles:
+    # 1. Common setup (Docker, dependencies)
+    - role: common
+      tags: [common]
+
+    # 2. Docker broken task
+    - role: docker-broken
+      tags: [docker]
+
+    # 3. Kubernetes broken task
+    - role: k8s-broken
+      tags: [k8s, kubernetes]
+
+    # 4. GitLab Runner broken task
+    - role: gitlab-broken
+      tags: [gitlab]
+
+    # 5. PostgreSQL broken task
+    - role: postgres-broken
+      tags: [postgres, postgresql, db]
+
+    # 6. Disk Full broken task
+    - role: diskfull-broken
+      tags: [disk, diskfull]
+
+    # 7. SSL Certificate broken task (installs nginx)
+    - role: ssl-broken
+      tags: [ssl, certificate, nginx]
+
+    # 8. Nginx Systemd broken task (MUST be after ssl-broken!)
+    - role: nginx-systemd-broken
+      tags: [nginx, systemd]
+
+    # 9. DNS broken task - MUST BE LAST!
+    - role: dns-broken
+      tags: [dns]
+
+  post_tasks:
+    - name: Display completion message
+      debug:
+        msg: |
+          ============================================
+          Interview VM is ready!
+
+          Tasks available:
+          1. Docker - Port 8080 недоступен
+          2. DNS - curl по домену не работает
+          3. Kubernetes - Pod в CrashLoopBackOff
+          4. GitLab Runner - Jobs не выполняются
+          5. PostgreSQL - Не принимает подключения
+          6. Disk Full - Место занято, но du не видит
+          7. SSL Certificate - HTTPS не работает
+          8. Nginx Systemd - Сервис не стартует
+          ============================================

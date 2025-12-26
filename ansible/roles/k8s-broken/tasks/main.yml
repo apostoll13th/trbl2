@@ -1,0 +1,144 @@
+---
+# =============================================================================
+# Task 3: Kubernetes - CrashLoopBackOff
+# =============================================================================
+# Легенда: "Под постоянно рестартится, разработчики говорят что приложение работает."
+#
+# Проблема: Probe path /health, а приложение отдаёт на /healthz
+# =============================================================================
+
+- name: Download k3s installer
+  get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s-install.sh
+    mode: '0755'
+
+- name: Install k3s
+  shell: |
+    INSTALL_K3S_EXEC="--disable=traefik --write-kubeconfig-mode=644" /tmp/k3s-install.sh
+  args:
+    creates: /usr/local/bin/k3s
+
+- name: Wait for k3s to be ready
+  shell: |
+    for i in $(seq 1 60); do
+      if kubectl get nodes 2>/dev/null | grep -q " Ready"; then
+        exit 0
+      fi
+      sleep 5
+    done
+    exit 1
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Create interview namespace
+  shell: |
+    kubectl create namespace interview --dry-run=client -o yaml | kubectl apply -f -
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Create broken webapp deployment
+  copy:
+    content: |
+      ---
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: webapp-nginx-config
+        namespace: interview
+      data:
+        default.conf: |
+          server {
+              listen 80;
+              server_name localhost;
+
+              location / {
+                  root /usr/share/nginx/html;
+                  index index.html;
+              }
+
+              # Приложение отдаёт health check на /healthz
+              location /healthz {
+                  access_log off;
+                  return 200 'OK';
+                  add_header Content-Type text/plain;
+              }
+          }
+      ---
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: webapp
+        namespace: interview
+        labels:
+          app: webapp
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: webapp
+        template:
+          metadata:
+            labels:
+              app: webapp
+          spec:
+            containers:
+            - name: nginx
+              image: nginx:alpine
+              ports:
+              - containerPort: 80
+              volumeMounts:
+              - name: nginx-config
+                mountPath: /etc/nginx/conf.d/default.conf
+                subPath: default.conf
+              # BUG: Probe path /health, но приложение отдаёт на /healthz!
+              readinessProbe:
+                httpGet:
+                  path: /health
+                  port: 80
+                initialDelaySeconds: 5
+                periodSeconds: 5
+                failureThreshold: 3
+              livenessProbe:
+                httpGet:
+                  path: /health
+                  port: 80
+                initialDelaySeconds: 10
+                periodSeconds: 10
+                failureThreshold: 3
+            volumes:
+            - name: nginx-config
+              configMap:
+                name: webapp-nginx-config
+      ---
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: webapp
+        namespace: interview
+      spec:
+        selector:
+          app: webapp
+        ports:
+        - port: 80
+          targetPort: 80
+        type: ClusterIP
+    dest: /tmp/k8s-webapp.yaml
+    mode: '0644'
+
+- name: Apply broken webapp deployment
+  shell: kubectl apply -f /tmp/k8s-webapp.yaml
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Create kubectl alias for ubuntu user
+  lineinfile:
+    path: /home/ubuntu/.bashrc
+    line: "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml"
+    create: yes
+
+- name: Create kubectl alias
+  lineinfile:
+    path: /home/ubuntu/.bashrc
+    line: "alias k='kubectl'"
+    create: yes

@@ -1,0 +1,59 @@
+---
+# =============================================================================
+# Task 5: PostgreSQL - Не принимает подключения
+# =============================================================================
+# Легенда: "PostgreSQL установлен, но psql -U postgres не работает.
+#           Приложение не может подключиться к базе."
+#
+# Проблема: В pg_hba.conf стоит reject для local подключений
+# =============================================================================
+
+- name: Install PostgreSQL
+  apt:
+    name:
+      - postgresql
+      - postgresql-contrib
+    state: present
+
+- name: Ensure PostgreSQL is started
+  systemd:
+    name: postgresql
+    state: started
+    enabled: yes
+
+- name: Get PostgreSQL version
+  shell: ls /etc/postgresql/
+  register: pg_version
+
+- name: Create test database and user
+  become_user: postgres
+  shell: |
+    psql -c "CREATE DATABASE interview_db;" 2>/dev/null || true
+    psql -c "CREATE USER interview_user WITH PASSWORD 'secret123';" 2>/dev/null || true
+    psql -c "GRANT ALL PRIVILEGES ON DATABASE interview_db TO interview_user;" 2>/dev/null || true
+  ignore_errors: yes
+
+- name: Break pg_hba.conf - reject local connections
+  copy:
+    content: |
+      # PostgreSQL Client Authentication Configuration File
+      # ===================================================
+      # TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+      # "local" is for Unix domain socket connections only
+      local   all             all                                     reject
+
+      # IPv4 local connections:
+      host    all             all             127.0.0.1/32            reject
+
+      # IPv6 local connections:
+      host    all             all             ::1/128                 reject
+    dest: "/etc/postgresql/{{ pg_version.stdout | trim }}/main/pg_hba.conf"
+    owner: postgres
+    group: postgres
+    mode: '0640'
+
+- name: Reload PostgreSQL to apply broken config
+  systemd:
+    name: postgresql
+    state: reloaded

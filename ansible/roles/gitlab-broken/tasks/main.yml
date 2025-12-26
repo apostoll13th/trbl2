@@ -1,0 +1,41 @@
+---
+# =============================================================================
+# Task 4: GitLab Runner - Jobs не выполняются
+# =============================================================================
+# Легенда: "Runner зарегистрирован, jobs падают сразу. Разберись."
+#
+# Проблема:
+# - gitlab-runner работает
+# - executor = docker в config.toml
+# - Неправильный путь к docker socket в config.toml
+# =============================================================================
+
+- name: Add GitLab Runner repository
+  shell: |
+    curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | bash
+  args:
+    creates: /etc/apt/sources.list.d/runner_gitlab-runner.list
+
+- name: Install GitLab Runner
+  apt:
+    name: gitlab-runner
+    state: present
+    update_cache: yes
+
+- name: Create GitLab Runner config directory
+  file:
+    path: /etc/gitlab-runner
+    state: directory
+    mode: '0755'
+
+- name: Create broken GitLab Runner config (wrong docker host)
+  template:
+    src: config.toml.j2
+    dest: /etc/gitlab-runner/config.toml
+    mode: '0600'
+
+- name: Enable and start GitLab Runner
+  systemd:
+    name: gitlab-runner
+    state: started
+    enabled: yes
