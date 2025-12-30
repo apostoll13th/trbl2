@@ -58,7 +58,7 @@ provider "vkcs" {
 
   # project_id - ID проекта в VK Cloud
   # Можно найти в URL личного кабинета: /app/project/<PROJECT_ID>/...
-  # Или в настройках проекта
+  # Или в настройках проекта (вкладка Terraform)
   project_id = var.vkcs_project_id
 
   # region - регион дата-центра
@@ -71,4 +71,8 @@ provider "vkcs" {
   # :35357 - стандартный admin порт Keystone
   # /v3/ - версия API (Identity API v3)
   auth_url = "https://infra.mail.ru:35357/v3/"
+
+  # user_domain_id - ID домена пользователя в Keystone
+  # "users" - стандартный домен для пользователей VK Cloud
+  user_domain_id = "users"
 }
