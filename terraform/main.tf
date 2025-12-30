@@ -39,9 +39,6 @@ resource "vkcs_networking_secgroup_rule" "ssh" {
   #   egress = исходящий (от VM, обычно разрешён по умолчанию)
   direction = "ingress"
 
-  # ethertype - версия IP протокола (IPv4 или IPv6)
-  ethertype = "IPv4"
-
   # protocol - протокол транспортного уровня (tcp, udp, icmp)
   protocol = "tcp"
 
@@ -62,7 +59,6 @@ resource "vkcs_networking_secgroup_rule" "ssh" {
 resource "vkcs_networking_secgroup_rule" "http" {
   # Разрешаем HTTP (порт 80) для веб-сервера
   direction         = "ingress"
-  ethertype         = "IPv4"
   protocol          = "tcp"
   port_range_min    = 80
   port_range_max    = 80
@@ -74,7 +70,6 @@ resource "vkcs_networking_secgroup_rule" "http_alt" {
   # Разрешаем порт 8080 - альтернативный HTTP
   # Используется для: Docker, Tomcat, dev-серверов и т.д.
   direction         = "ingress"
-  ethertype         = "IPv4"
   protocol          = "tcp"
   port_range_min    = 8080
   port_range_max    = 8080
@@ -85,7 +80,6 @@ resource "vkcs_networking_secgroup_rule" "http_alt" {
 resource "vkcs_networking_secgroup_rule" "https" {
   # Разрешаем HTTPS (порт 443) для SSL сертификатов
   direction         = "ingress"
-  ethertype         = "IPv4"
   protocol          = "tcp"
   port_range_min    = 443
   port_range_max    = 443
@@ -96,7 +90,6 @@ resource "vkcs_networking_secgroup_rule" "https" {
 resource "vkcs_networking_secgroup_rule" "icmp" {
   # Разрешаем ICMP (ping) - полезно для диагностики
   direction         = "ingress"
-  ethertype         = "IPv4"
   protocol          = "icmp"
   # У ICMP нет портов, поэтому port_range не указываем
   remote_ip_prefix  = "0.0.0.0/0"
