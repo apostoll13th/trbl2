@@ -1,57 +1,50 @@
 # =============================================================================
 # outputs.tf - Выходные значения
 # =============================================================================
-# Outputs - это значения, которые Terraform выводит после apply
+# Outputs - значения, которые Terraform выводит после apply
 # Используются для:
 # 1. Показать важную информацию пользователю
-# 2. Передать данные в другие модули или скрипты
-# 3. Сохранить в state для последующего использования
+# 2. Передать данные в скрипты или другие модули
+# 3. Интеграция с Ansible, CI/CD и т.д.
 # =============================================================================
 
 output "vm_ip" {
-  # description - описание что это за значение
   description = "Public IP address of the VM"
 
-  # value - само значение
-  # Берём атрибут address из ресурса floating IP
-  # Формат: <тип_ресурса>.<имя>.<атрибут>
-  value = vkcs_networking_floatingip.interview.address
-
-  # После terraform apply будет выведено:
-  # vm_ip = "89.208.xxx.xxx"
+  # access_ip_v4 - публичный IP, назначенный VM
+  # Автоматически выделяется при подключении к сети "internet"
+  value = vkcs_compute_instance.interview.access_ip_v4
 }
 
 output "ssh_command" {
   description = "SSH command to connect to the VM"
 
-  # Интерполяция строк: ${...} подставляет значение
+  # Готовая команда для подключения
   # ubuntu - стандартный пользователь в Ubuntu образах VK Cloud
-  value = "ssh ubuntu@${vkcs_networking_floatingip.interview.address}"
-
-  # Удобно скопировать и вставить в терминал
+  value = "ssh ubuntu@${vkcs_compute_instance.interview.access_ip_v4}"
 }
 
 output "vm_name" {
   description = "Name of the VM"
+  value       = vkcs_compute_instance.interview.name
+}
 
-  # Берём имя из созданного instance
-  value = vkcs_compute_instance.interview.name
+output "vm_id" {
+  description = "ID of the VM instance"
+  value       = vkcs_compute_instance.interview.id
 }
 
 # -----------------------------------------------------------------------------
 # Как использовать outputs:
 # -----------------------------------------------------------------------------
-# 1. После apply:
-#    terraform apply
-#    # Выведет все outputs
 #
-# 2. Получить конкретный output:
-#    terraform output vm_ip
-#    # Выведет только IP
+# После terraform apply:
+#   terraform output           # показать все outputs
+#   terraform output vm_ip     # показать только IP
+#   terraform output -raw vm_ip  # без кавычек (для скриптов)
+#   terraform output -json     # в формате JSON
 #
-# 3. В формате JSON (для скриптов):
-#    terraform output -json
-#
-# 4. Без кавычек (для shell):
-#    terraform output -raw vm_ip
+# В скриптах:
+#   VM_IP=$(terraform output -raw vm_ip)
+#   ssh ubuntu@$VM_IP
 # -----------------------------------------------------------------------------
