@@ -65,7 +65,7 @@ variable "availability_zone" {
   # - MS1 (Moscow-1) - альтернативная зона
   # - ME1 (Moscow-East-1) - восточная зона
   # Разные AZ = разные стойки/залы, защита от локальных сбоев
-  default = "GZ1"
+  default = "ME1"
 }
 
 variable "ssh_public_key_path" {
