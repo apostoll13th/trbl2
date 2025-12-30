@@ -4,7 +4,7 @@ terraform {
   required_providers {
     vkcs = {
       source  = "vk-cs/vkcs"
-      version = "~> 0.7.0"
+      version = "~> 0.13.0"
     }
     local = {
       source  = "hashicorp/local"
@@ -18,4 +18,5 @@ provider "vkcs" {
   password   = var.vkcs_password
   project_id = var.vkcs_project_id
   region     = var.vkcs_region
+  auth_url   = "https://infra.mail.ru:35357/v3/"
 }
