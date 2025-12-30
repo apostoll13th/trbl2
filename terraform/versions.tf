@@ -63,16 +63,5 @@ provider "vkcs" {
 
   # region - регион дата-центра
   # RegionOne - основной регион VK Cloud (Москва)
-  # Регион определяет физическое расположение серверов
   region = var.vkcs_region
-
-  # auth_url - URL сервиса аутентификации (Keystone)
-  # VK Cloud использует OpenStack, Keystone - его сервис авторизации
-  # :35357 - стандартный admin порт Keystone
-  # /v3/ - версия API (Identity API v3)
-  auth_url = "https://infra.mail.ru:35357/v3/"
-
-  # user_domain_id - ID домена пользователя в Keystone
-  # "users" - стандартный домен для пользователей VK Cloud
-  user_domain_id = "users"
 }
