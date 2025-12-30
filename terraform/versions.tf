@@ -49,19 +49,18 @@ terraform {
 # -----------------------------------------------------------------------------
 provider "vkcs" {
   # username - email от аккаунта VK Cloud
-  # Берётся из переменной var.vkcs_username (задаётся в .env)
   username = var.vkcs_username
 
   # password - пароль от аккаунта VK Cloud
-  # sensitive = true в переменной скрывает его в логах
   password = var.vkcs_password
 
-  # project_id - ID проекта в VK Cloud
-  # Можно найти в URL личного кабинета: /app/project/<PROJECT_ID>/...
-  # Или в настройках проекта (вкладка Terraform)
+  # project_id - ID проекта (из настроек проекта -> API ключи)
+  # Формат: hex-строка типа "a52e7c2e4d2a4f3abd1757471fa378f6"
   project_id = var.vkcs_project_id
 
-  # region - регион дата-центра
-  # RegionOne - основной регион VK Cloud (Москва)
+  # region - регион VK Cloud
   region = var.vkcs_region
+
+  # auth_url - endpoint аутентификации VK Cloud
+  auth_url = "https://infra.mail.ru:35357/v3/"
 }
