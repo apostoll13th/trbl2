@@ -18,10 +18,6 @@ data "vkcs_networking_network" "internet" {
   name = "internet"
 }
 
-# Получаем первую доступную подсеть из сети internet
-data "vkcs_networking_subnet" "internet" {
-  network_id = data.vkcs_networking_network.internet.id
-}
 
 # =============================================================================
 # SECURITY GROUP (Файрвол)
@@ -123,10 +119,7 @@ resource "vkcs_networking_port" "interview" {
   # Привязываем security group к порту
   security_group_ids = [vkcs_networking_secgroup.interview.id]
 
-  # IP будет назначен автоматически из подсети
-  fixed_ip {
-    subnet_id = data.vkcs_networking_subnet.internet.id
-  }
+  # IP будет назначен автоматически через DHCP
 }
 
 # =============================================================================
