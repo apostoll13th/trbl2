@@ -2,7 +2,11 @@
 # =============================================================================
 # DevOps Interview Tasks - Deploy Script
 # =============================================================================
-# Использование: ./scripts/deploy.sh
+# Использование:
+#   ./scripts/deploy.sh              - Запустить все задачи
+#   ./scripts/deploy.sh list         - Показать список задач
+#   ./scripts/deploy.sh docker       - Запустить только Docker задачу
+#   ./scripts/deploy.sh docker,k8s   - Запустить несколько задач
 # =============================================================================
 
 set -e
@@ -14,11 +18,88 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+# =============================================================================
+# Available tasks
+# =============================================================================
+
+declare -A TASKS=(
+    ["docker"]="Docker контейнер не отвечает на порту 8080"
+    ["k8s"]="Kubernetes Pod в CrashLoopBackOff"
+    ["gitlab"]="GitLab Runner не может запустить jobs"
+    ["postgres"]="PostgreSQL не принимает подключения"
+    ["disk"]="Диск заполнен, но du не показывает файлы"
+    ["ssl"]="HTTPS не работает (проблема с сертификатом)"
+    ["nginx"]="Nginx systemd сервис не стартует"
+    ["dns"]="DNS не работает, curl по домену падает"
+)
+
+# Task order (dns must be last!)
+TASK_ORDER=("docker" "k8s" "gitlab" "postgres" "disk" "ssl" "nginx" "dns")
+
+# =============================================================================
+# Show task list
+# =============================================================================
+
+show_tasks() {
+    echo
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}         ${BLUE}DevOps Interview Tasks - Список задач${NC}                 ${CYAN}║${NC}"
+    echo -e "${CYAN}╠════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
+
+    local i=1
+    for task in "${TASK_ORDER[@]}"; do
+        printf "${CYAN}║${NC}  ${GREEN}%-2s${NC}. ${YELLOW}%-10s${NC} - %-40s ${CYAN}║${NC}\n" "$i" "$task" "${TASKS[$task]}"
+        ((i++))
+    done
+
+    echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
+    echo -e "${CYAN}╠════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${CYAN}║${NC}  ${BLUE}Примеры запуска:${NC}                                             ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}    ${GREEN}./scripts/deploy.sh${NC}              - все задачи           ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}    ${GREEN}./scripts/deploy.sh docker${NC}       - только Docker        ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}    ${GREEN}./scripts/deploy.sh k8s${NC}          - только Kubernetes    ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}    ${GREEN}./scripts/deploy.sh docker,k8s${NC}   - Docker + Kubernetes  ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}    ${GREEN}./scripts/deploy.sh list${NC}         - показать этот список ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
+    echo
+}
+
+# =============================================================================
+# Validate tasks
+# =============================================================================
+
+validate_tasks() {
+    local input="$1"
+    local valid_tasks=""
+
+    IFS=',' read -ra SELECTED <<< "$input"
+    for task in "${SELECTED[@]}"; do
+        task=$(echo "$task" | tr -d ' ')
+        if [[ -z "${TASKS[$task]}" ]]; then
+            log_error "Unknown task: $task"
+            echo "Available tasks: ${!TASKS[*]}"
+            exit 1
+        fi
+        if [[ -n "$valid_tasks" ]]; then
+            valid_tasks="$valid_tasks,$task"
+        else
+            valid_tasks="$task"
+        fi
+    done
+
+    echo "$valid_tasks"
+}
 
 # =============================================================================
 # Check prerequisites
@@ -163,6 +244,8 @@ wait_for_ssh() {
 # =============================================================================
 
 run_ansible() {
+    local selected_tasks="$1"
+
     log_info "Running Ansible playbook..."
 
     cd "$PROJECT_DIR/ansible"
@@ -178,8 +261,61 @@ run_ansible() {
     # Wait for SSH
     wait_for_ssh "$vm_ip"
 
+    # Build ansible command
+    local ansible_cmd="ansible-playbook playbooks/setup-all.yml -v"
+
+    if [[ -n "$selected_tasks" ]]; then
+        # Always include common role for dependencies
+        ansible_cmd="$ansible_cmd --tags common,$selected_tasks"
+        log_info "Running tasks: common,$selected_tasks"
+    else
+        log_info "Running all tasks"
+    fi
+
     # Run playbook
-    ansible-playbook playbooks/setup-all.yml -v
+    $ansible_cmd
+
+    cd "$PROJECT_DIR"
+}
+
+# =============================================================================
+# Show completion message
+# =============================================================================
+
+show_completion() {
+    local selected_tasks="$1"
+
+    echo
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}         ${GREEN}Deployment completed successfully!${NC}                    ${CYAN}║${NC}"
+    echo -e "${CYAN}╠════════════════════════════════════════════════════════════════╣${NC}"
+
+    cd "$PROJECT_DIR/terraform"
+    local vm_ip=$(terraform output -raw vm_ip)
+    local ssh_cmd=$(terraform output -raw ssh_command)
+
+    echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}  ${BLUE}VM IP:${NC}  $vm_ip                                        ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}  ${BLUE}SSH:${NC}    $ssh_cmd                              ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
+    echo -e "${CYAN}╠════════════════════════════════════════════════════════════════╣${NC}"
+    echo -e "${CYAN}║${NC}  ${BLUE}Deployed tasks:${NC}                                              ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
+
+    if [[ -n "$selected_tasks" ]]; then
+        IFS=',' read -ra DEPLOYED <<< "$selected_tasks"
+        for task in "${DEPLOYED[@]}"; do
+            printf "${CYAN}║${NC}    ${GREEN}✓${NC} ${YELLOW}%-10s${NC} - %-42s ${CYAN}║${NC}\n" "$task" "${TASKS[$task]}"
+        done
+    else
+        for task in "${TASK_ORDER[@]}"; do
+            printf "${CYAN}║${NC}    ${GREEN}✓${NC} ${YELLOW}%-10s${NC} - %-42s ${CYAN}║${NC}\n" "$task" "${TASKS[$task]}"
+        done
+    fi
+
+    echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
+    echo
 
     cd "$PROJECT_DIR"
 }
@@ -189,35 +325,39 @@ run_ansible() {
 # =============================================================================
 
 main() {
-    echo "=============================================="
-    echo " DevOps Interview Tasks - Deploy"
-    echo "=============================================="
+    local selected_tasks=""
+
+    # Handle arguments
+    case "${1:-}" in
+        list|--list|-l)
+            show_tasks
+            exit 0
+            ;;
+        help|--help|-h)
+            show_tasks
+            exit 0
+            ;;
+        "")
+            # No argument - run all tasks
+            selected_tasks=""
+            ;;
+        *)
+            # Validate and set selected tasks
+            selected_tasks=$(validate_tasks "$1")
+            ;;
+    esac
+
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║${NC}         ${BLUE}DevOps Interview Tasks - Deploy${NC}                       ${CYAN}║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════════╝${NC}"
     echo
 
     check_prerequisites
     setup_env
     check_ssh_key
     run_terraform
-    run_ansible
-
-    echo
-    echo "=============================================="
-    log_info "Deployment completed successfully!"
-    echo "=============================================="
-    echo
-
-    cd "$PROJECT_DIR/terraform"
-    echo "VM IP: $(terraform output -raw vm_ip)"
-    echo "SSH:   $(terraform output -raw ssh_command)"
-    echo
-    echo "=============================================="
-    echo " Interview Tasks:"
-    echo "=============================================="
-    echo "1. Docker:   curl localhost:8080 не работает"
-    echo "2. DNS:      curl google.com не работает"
-    echo "3. K8s:      kubectl -n interview get pods (CrashLoopBackOff)"
-    echo "4. GitLab:   gitlab-runner verify (docker недоступен)"
-    echo "=============================================="
+    run_ansible "$selected_tasks"
+    show_completion "$selected_tasks"
 }
 
 main "$@"
