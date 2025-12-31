@@ -171,6 +171,10 @@ run_ansible() {
     local vm_ip
     vm_ip=$(cd "$PROJECT_DIR/terraform" && terraform output -raw vm_ip)
 
+    # Wait for VM to boot (cloud-init takes time)
+    log_info "Waiting 60 seconds for VM to boot..."
+    sleep 60
+
     # Wait for SSH
     wait_for_ssh "$vm_ip"
 
