@@ -3,13 +3,25 @@
 # =============================================================================
 # Этот файл создаёт:
 # 1. Security Group (файрвол)
-# 2. Виртуальную машину с публичным IP
-# 3. Ansible inventory файл
-#
-# УПРОЩЁННЫЙ ВАРИАНТ: используем готовую сеть "internet" из VK Cloud
-# вместо создания своей сети + роутера + floating IP
-# Так же делает UI при создании VM с галочкой "Назначить внешний IP"
+# 2. Сетевой порт с IP адресом
+# 3. Виртуальную машину с публичным IP
+# 4. Ansible inventory файл
 # =============================================================================
+
+# =============================================================================
+# NETWORK DATA SOURCES
+# =============================================================================
+# Получаем информацию о существующей сети "internet" и её подсетях
+# =============================================================================
+
+data "vkcs_networking_network" "internet" {
+  name = "internet"
+}
+
+# Получаем первую доступную подсеть из сети internet
+data "vkcs_networking_subnet" "internet" {
+  network_id = data.vkcs_networking_network.internet.id
+}
 
 # =============================================================================
 # SECURITY GROUP (Файрвол)
@@ -97,6 +109,27 @@ resource "vkcs_networking_secgroup_rule" "icmp" {
 }
 
 # =============================================================================
+# NETWORK PORT
+# =============================================================================
+# Создаём сетевой порт с IP адресом из сети internet
+# Порт = точка подключения VM к сети с назначенным IP
+# =============================================================================
+
+resource "vkcs_networking_port" "interview" {
+  name           = "interview-port"
+  network_id     = data.vkcs_networking_network.internet.id
+  admin_state_up = true
+
+  # Привязываем security group к порту
+  security_group_ids = [vkcs_networking_secgroup.interview.id]
+
+  # IP будет назначен автоматически из подсети
+  fixed_ip {
+    subnet_id = data.vkcs_networking_subnet.internet.id
+  }
+}
+
+# =============================================================================
 # COMPUTE (Виртуальная машина)
 # =============================================================================
 
@@ -164,8 +197,7 @@ resource "vkcs_compute_instance" "interview" {
   # SSH ключ для доступа (добавится в ~/.ssh/authorized_keys)
   key_pair = vkcs_compute_keypair.interview.name
 
-  # Security Groups - правила файрвола для этой VM
-  security_groups = [vkcs_networking_secgroup.interview.name]
+  # Security Groups уже привязаны к порту, здесь не указываем
 
   # Availability Zone - физическое размещение в дата-центре
   # GZ1, MS1, ME1 - разные зоны в Москве
@@ -210,14 +242,11 @@ resource "vkcs_compute_instance" "interview" {
   # ---------------------------------------------------------------------------
   # network - сетевое подключение
   # ---------------------------------------------------------------------------
-  # КЛЮЧЕВОЙ МОМЕНТ: используем готовую сеть "internet"
-  # Это та же сеть, что выбирается в UI при создании VM
-  # VM автоматически получит публичный IP из этой сети!
+  # Используем порт который создали выше
+  # Порт гарантирует что VM получит IP адрес из подсети
   # ---------------------------------------------------------------------------
   network {
-    # name = "internet" - стандартная сеть VK Cloud с публичными IP
-    # Альтернатива: uuid = "<id сети>" если знаете ID
-    name = "internet"
+    port = vkcs_networking_port.interview.id
   }
 }
 
@@ -232,9 +261,8 @@ resource "local_file" "ansible_inventory" {
   # templatefile() - рендерит шаблон с подстановкой переменных
   # ${path.module} - путь к директории с этим .tf файлом
   content = templatefile("${path.module}/inventory.tftpl", {
-    # access_ip_v4 - публичный IP адрес VM
-    # Автоматически назначается при подключении к сети "internet"
-    vm_ip   = vkcs_compute_instance.interview.access_ip_v4
+    # Берём IP из порта - гарантированно назначенный адрес
+    vm_ip   = vkcs_networking_port.interview.all_fixed_ips[0]
     vm_name = var.vm_name
   })
 
