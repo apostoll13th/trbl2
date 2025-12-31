@@ -10,17 +10,12 @@
 
 output "vm_ip" {
   description = "Public IP address of the VM"
-
-  # Берём IP из порта - это гарантированно назначенный адрес
-  value = vkcs_networking_port.interview.all_fixed_ips[0]
+  value       = vkcs_compute_instance.interview.access_ip_v4
 }
 
 output "ssh_command" {
   description = "SSH command to connect to the VM"
-
-  # Готовая команда для подключения
-  # ubuntu - стандартный пользователь в Ubuntu образах VK Cloud
-  value = "ssh ubuntu@${vkcs_networking_port.interview.all_fixed_ips[0]}"
+  value       = "ssh ubuntu@${vkcs_compute_instance.interview.access_ip_v4}"
 }
 
 output "vm_name" {
