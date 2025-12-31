@@ -9,14 +9,41 @@
 cp .env.example .env
 vim .env  # заполните username, password, project_id
 
-# 2. Деплой
-./scripts/deploy.sh
+# 2. Посмотреть список доступных задач
+./scripts/deploy.sh list
 
-# 3. Подключение к VM
+# 3. Деплой (выбор варианта)
+./scripts/deploy.sh              # все задачи
+./scripts/deploy.sh docker       # только Docker
+./scripts/deploy.sh docker,k8s   # несколько задач
+
+# 4. Подключение к VM
 ssh ubuntu@<VM_IP>
 
-# 4. После собеседования
+# 5. После собеседования
 ./scripts/destroy.sh
+```
+
+## Выбор задач
+
+```bash
+# Показать список всех задач
+./scripts/deploy.sh list
+
+# Запустить конкретную задачу
+./scripts/deploy.sh docker       # Docker: порт 8080 недоступен
+./scripts/deploy.sh k8s          # Kubernetes: Pod в CrashLoopBackOff
+./scripts/deploy.sh gitlab       # GitLab Runner: jobs не запускаются
+./scripts/deploy.sh postgres     # PostgreSQL: не принимает подключения
+./scripts/deploy.sh disk         # Disk Full: место занято, du не видит
+./scripts/deploy.sh ssl          # SSL: HTTPS не работает
+./scripts/deploy.sh nginx        # Nginx: systemd сервис не стартует
+./scripts/deploy.sh dns          # DNS: curl по домену не работает
+
+# Комбинации задач
+./scripts/deploy.sh docker,k8s           # Junior DevOps
+./scripts/deploy.sh docker,postgres,disk # Middle DevOps
+./scripts/deploy.sh                      # Senior - все задачи
 ```
 
 ## Требования
