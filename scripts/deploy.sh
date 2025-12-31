@@ -27,22 +27,34 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # =============================================================================
-# Available tasks
+# Available tasks (compatible with bash 3.x on macOS)
 # =============================================================================
 
-declare -A TASKS=(
-    ["docker"]="Docker контейнер не отвечает на порту 8080"
-    ["k8s"]="Kubernetes Pod в CrashLoopBackOff"
-    ["gitlab"]="GitLab Runner не может запустить jobs"
-    ["postgres"]="PostgreSQL не принимает подключения"
-    ["disk"]="Диск заполнен, но du не показывает файлы"
-    ["ssl"]="HTTPS не работает (проблема с сертификатом)"
-    ["nginx"]="Nginx systemd сервис не стартует"
-    ["dns"]="DNS не работает, curl по домену падает"
-)
+TASK_NAMES="docker k8s gitlab postgres disk ssl nginx dns"
 
-# Task order (dns must be last!)
-TASK_ORDER=("docker" "k8s" "gitlab" "postgres" "disk" "ssl" "nginx" "dns")
+get_task_description() {
+    case "$1" in
+        docker)   echo "Docker контейнер не отвечает на порту 8080" ;;
+        k8s)      echo "Kubernetes Pod в CrashLoopBackOff" ;;
+        gitlab)   echo "GitLab Runner не может запустить jobs" ;;
+        postgres) echo "PostgreSQL не принимает подключения" ;;
+        disk)     echo "Диск заполнен, но du не показывает файлы" ;;
+        ssl)      echo "HTTPS не работает (проблема с сертификатом)" ;;
+        nginx)    echo "Nginx systemd сервис не стартует" ;;
+        dns)      echo "DNS не работает, curl по домену падает" ;;
+        *)        echo "" ;;
+    esac
+}
+
+is_valid_task() {
+    local task="$1"
+    for t in $TASK_NAMES; do
+        if [ "$t" = "$task" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
 
 # =============================================================================
 # Show task list
@@ -56,9 +68,10 @@ show_tasks() {
     echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
 
     local i=1
-    for task in "${TASK_ORDER[@]}"; do
-        printf "${CYAN}║${NC}  ${GREEN}%-2s${NC}. ${YELLOW}%-10s${NC} - %-40s ${CYAN}║${NC}\n" "$i" "$task" "${TASKS[$task]}"
-        ((i++))
+    for task in $TASK_NAMES; do
+        local desc=$(get_task_description "$task")
+        printf "${CYAN}║${NC}  ${GREEN}%-2s${NC}. ${YELLOW}%-10s${NC} - %-40s ${CYAN}║${NC}\n" "$i" "$task" "$desc"
+        i=$((i + 1))
     done
 
     echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
@@ -83,20 +96,25 @@ validate_tasks() {
     local input="$1"
     local valid_tasks=""
 
-    IFS=',' read -ra SELECTED <<< "$input"
-    for task in "${SELECTED[@]}"; do
+    # Split by comma
+    local OLD_IFS="$IFS"
+    IFS=','
+    for task in $input; do
+        IFS="$OLD_IFS"
         task=$(echo "$task" | tr -d ' ')
-        if [[ -z "${TASKS[$task]}" ]]; then
+        if ! is_valid_task "$task"; then
             log_error "Unknown task: $task"
-            echo "Available tasks: ${!TASKS[*]}"
+            echo "Available tasks: $TASK_NAMES"
             exit 1
         fi
-        if [[ -n "$valid_tasks" ]]; then
+        if [ -n "$valid_tasks" ]; then
             valid_tasks="$valid_tasks,$task"
         else
             valid_tasks="$task"
         fi
+        IFS=','
     done
+    IFS="$OLD_IFS"
 
     echo "$valid_tasks"
 }
@@ -232,7 +250,7 @@ wait_for_ssh() {
         fi
         log_info "Attempt $attempt/$max_attempts - waiting..."
         sleep 10
-        ((attempt++))
+        attempt=$((attempt + 1))
     done
 
     log_error "SSH did not become available in time"
@@ -264,7 +282,7 @@ run_ansible() {
     # Build ansible command
     local ansible_cmd="ansible-playbook playbooks/setup-all.yml -v"
 
-    if [[ -n "$selected_tasks" ]]; then
+    if [ -n "$selected_tasks" ]; then
         # Always include common role for dependencies
         ansible_cmd="$ansible_cmd --tags common,$selected_tasks"
         log_info "Running tasks: common,$selected_tasks"
@@ -302,14 +320,20 @@ show_completion() {
     echo -e "${CYAN}║${NC}  ${BLUE}Deployed tasks:${NC}                                              ${CYAN}║${NC}"
     echo -e "${CYAN}║${NC}                                                                ${CYAN}║${NC}"
 
-    if [[ -n "$selected_tasks" ]]; then
-        IFS=',' read -ra DEPLOYED <<< "$selected_tasks"
-        for task in "${DEPLOYED[@]}"; do
-            printf "${CYAN}║${NC}    ${GREEN}✓${NC} ${YELLOW}%-10s${NC} - %-42s ${CYAN}║${NC}\n" "$task" "${TASKS[$task]}"
+    if [ -n "$selected_tasks" ]; then
+        local OLD_IFS="$IFS"
+        IFS=','
+        for task in $selected_tasks; do
+            IFS="$OLD_IFS"
+            local desc=$(get_task_description "$task")
+            printf "${CYAN}║${NC}    ${GREEN}✓${NC} ${YELLOW}%-10s${NC} - %-42s ${CYAN}║${NC}\n" "$task" "$desc"
+            IFS=','
         done
+        IFS="$OLD_IFS"
     else
-        for task in "${TASK_ORDER[@]}"; do
-            printf "${CYAN}║${NC}    ${GREEN}✓${NC} ${YELLOW}%-10s${NC} - %-42s ${CYAN}║${NC}\n" "$task" "${TASKS[$task]}"
+        for task in $TASK_NAMES; do
+            local desc=$(get_task_description "$task")
+            printf "${CYAN}║${NC}    ${GREEN}✓${NC} ${YELLOW}%-10s${NC} - %-42s ${CYAN}║${NC}\n" "$task" "$desc"
         done
     fi
 
