@@ -9,17 +9,6 @@
 # =============================================================================
 
 # =============================================================================
-# NETWORK DATA SOURCES
-# =============================================================================
-# Получаем информацию о существующей сети "internet" и её подсетях
-# =============================================================================
-
-data "vkcs_networking_network" "internet" {
-  name = "internet"
-}
-
-
-# =============================================================================
 # SECURITY GROUP (Файрвол)
 # =============================================================================
 # Security Group = набор правил файрвола
@@ -105,24 +94,6 @@ resource "vkcs_networking_secgroup_rule" "icmp" {
 }
 
 # =============================================================================
-# NETWORK PORT
-# =============================================================================
-# Создаём сетевой порт с IP адресом из сети internet
-# Порт = точка подключения VM к сети с назначенным IP
-# =============================================================================
-
-resource "vkcs_networking_port" "interview" {
-  name           = "interview-port"
-  network_id     = data.vkcs_networking_network.internet.id
-  admin_state_up = true
-
-  # Привязываем security group к порту
-  security_group_ids = [vkcs_networking_secgroup.interview.id]
-
-  # IP будет назначен автоматически через DHCP
-}
-
-# =============================================================================
 # COMPUTE (Виртуальная машина)
 # =============================================================================
 
@@ -190,7 +161,8 @@ resource "vkcs_compute_instance" "interview" {
   # SSH ключ для доступа (добавится в ~/.ssh/authorized_keys)
   key_pair = vkcs_compute_keypair.interview.name
 
-  # Security Groups уже привязаны к порту, здесь не указываем
+  # Security Groups - правила файрвола для этой VM
+  security_group_ids = [vkcs_networking_secgroup.interview.id]
 
   # Availability Zone - физическое размещение в дата-центре
   # GZ1, MS1, ME1 - разные зоны в Москве
@@ -235,11 +207,10 @@ resource "vkcs_compute_instance" "interview" {
   # ---------------------------------------------------------------------------
   # network - сетевое подключение
   # ---------------------------------------------------------------------------
-  # Используем порт который создали выше
-  # Порт гарантирует что VM получит IP адрес из подсети
+  # Сеть "internet" - стандартная сеть VK Cloud с публичными IP
   # ---------------------------------------------------------------------------
   network {
-    port = vkcs_networking_port.interview.id
+    name = "internet"
   }
 }
 
@@ -254,8 +225,7 @@ resource "local_file" "ansible_inventory" {
   # templatefile() - рендерит шаблон с подстановкой переменных
   # ${path.module} - путь к директории с этим .tf файлом
   content = templatefile("${path.module}/inventory.tftpl", {
-    # Берём IP из порта - гарантированно назначенный адрес
-    vm_ip   = vkcs_networking_port.interview.all_fixed_ips[0]
+    vm_ip   = vkcs_compute_instance.interview.access_ip_v4
     vm_name = var.vm_name
   })
 
