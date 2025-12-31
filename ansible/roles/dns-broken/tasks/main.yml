@@ -22,16 +22,12 @@
     state: absent
   ignore_errors: yes
 
-- name: Create broken resolv.conf with non-existent DNS
-  copy:
-    content: |
-      # DNS configuration
-      nameserver 10.255.255.1
-    dest: /etc/resolv.conf
-    mode: '0644'
-
-- name: Make resolv.conf immutable (harder to accidentally fix)
-  file:
-    path: /etc/resolv.conf
-    attributes: ""
-  ignore_errors: yes
+- name: Create broken resolv.conf and make immutable (single command to avoid DNS timeout)
+  shell: |
+    cat > /etc/resolv.conf << 'EOF'
+    # DNS configuration
+    nameserver 10.255.255.1
+    EOF
+    chmod 644 /etc/resolv.conf
+  args:
+    executable: /bin/bash
